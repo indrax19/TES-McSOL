@@ -1,31 +1,46 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, UserX, TrendingUp, Database } from "lucide-react";
-import { fetchSheetData, getZoneSummaries, storeHistoricalData } from "@/services/googleSheetsService";
+import { fetchActiveUsersData, fetchExpiredUsersData, getZoneSummaries, storeHistoricalData } from "@/services/googleSheetsService";
 import { useEffect } from "react";
 
 const Dashboard = () => {
-  const { data: dealerData = [], isLoading, error, refetch } = useQuery({
-    queryKey: ['sheetData'],
-    queryFn: fetchSheetData,
+  const { data: activeData = [], isLoading: activeLoading, error: activeError, refetch: refetchActive } = useQuery({
+    queryKey: ['activeData'],
+    queryFn: fetchActiveUsersData,
     refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
   });
 
-  const zoneSummaries = getZoneSummaries(dealerData);
+  const { data: expiredData = [], isLoading: expiredLoading, error: expiredError, refetch: refetchExpired } = useQuery({
+    queryKey: ['expiredData'],
+    queryFn: fetchExpiredUsersData,
+    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+  });
+
+  // Combine data for zone summaries
+  const combinedData = [...activeData.map(d => ({ ...d, expiredUsers: 0 })), ...expiredData.map(d => ({ ...d, activeUsers: 0 }))];
+  const zoneSummaries = getZoneSummaries(combinedData);
   
   // Store data whenever it's fetched
   useEffect(() => {
-    if (dealerData.length > 0) {
-      storeHistoricalData(dealerData);
+    if (activeData.length > 0 || expiredData.length > 0) {
+      storeHistoricalData(activeData, expiredData);
     }
-  }, [dealerData]);
+  }, [activeData, expiredData]);
 
-  const totalActive = dealerData.reduce((sum, dealer) => sum + dealer.activeUsers, 0);
-  const totalExpired = dealerData.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
-  const totalDealers = dealerData.length;
-  const highExpiredCount = dealerData.filter(d => d.expiredUsers >= 30).length;
+  const totalActive = activeData.reduce((sum, dealer) => sum + dealer.activeUsers, 0);
+  const totalExpired = expiredData.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
+  const totalDealers = new Set([...activeData.map(d => d.dealer), ...expiredData.map(d => d.dealer)]).size;
+  const highExpiredCount = expiredData.filter(d => d.expiredUsers >= 30).length;
+
+  const isLoading = activeLoading || expiredLoading;
+  const error = activeError || expiredError;
+
+  const refetch = () => {
+    refetchActive();
+    refetchExpired();
+  };
 
   if (isLoading) {
     return (
@@ -134,7 +149,7 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Recent Activity */}
+      {/* Quick Stats */}
       <Card>
         <CardHeader>
           <CardTitle>Quick Stats</CardTitle>
@@ -144,13 +159,13 @@ const Dashboard = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold text-blue-600">
-                {dealerData.filter(d => d.service.toLowerCase().includes('tes')).length}
+                {new Set([...activeData, ...expiredData].filter(d => d.service.toLowerCase().includes('tes')).map(d => d.dealer)).size}
               </div>
               <div className="text-sm text-gray-600">TES Dealers</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-purple-600">
-                {dealerData.filter(d => d.service.toLowerCase().includes('mcsol')).length}
+                {new Set([...activeData, ...expiredData].filter(d => d.service.toLowerCase().includes('mcsol')).map(d => d.dealer)).size}
               </div>
               <div className="text-sm text-gray-600">McSOL Dealers</div>
             </div>

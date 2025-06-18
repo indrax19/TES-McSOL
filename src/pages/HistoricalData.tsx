@@ -21,20 +21,27 @@ const HistoricalData = () => {
   const summaryStats = useMemo(() => {
     if (!historicalData) return null;
 
-    const totalActive = historicalData.reduce((sum, dealer) => sum + dealer.activeUsers, 0);
-    const totalExpired = historicalData.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
-    const tesData = historicalData.filter(d => d.service.toLowerCase().includes('tes'));
-    const mcsolData = historicalData.filter(d => d.service.toLowerCase().includes('mcsol'));
+    const { active, expired } = historicalData;
+
+    const totalActive = active.reduce((sum, dealer) => sum + dealer.activeUsers, 0);
+    const totalExpired = expired.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
+    const tesActiveData = active.filter(d => d.service.toLowerCase().includes('tes'));
+    const tesExpiredData = expired.filter(d => d.service.toLowerCase().includes('tes'));
+    const mcsolActiveData = active.filter(d => d.service.toLowerCase().includes('mcsol'));
+    const mcsolExpiredData = expired.filter(d => d.service.toLowerCase().includes('mcsol'));
+
+    const totalDealers = new Set([...active.map(d => d.dealer), ...expired.map(d => d.dealer)]).size;
+    const highExpiredDealers = expired.filter(d => d.expiredUsers >= 30).length;
 
     return {
       totalActive,
       totalExpired,
-      totalDealers: historicalData.length,
-      tesActive: tesData.reduce((sum, d) => sum + d.activeUsers, 0),
-      tesExpired: tesData.reduce((sum, d) => sum + d.expiredUsers, 0),
-      mcsolActive: mcsolData.reduce((sum, d) => sum + d.activeUsers, 0),
-      mcsolExpired: mcsolData.reduce((sum, d) => sum + d.expiredUsers, 0),
-      highExpiredDealers: historicalData.filter(d => d.expiredUsers >= 30).length
+      totalDealers,
+      tesActive: tesActiveData.reduce((sum, d) => sum + d.activeUsers, 0),
+      tesExpired: tesExpiredData.reduce((sum, d) => sum + d.expiredUsers, 0),
+      mcsolActive: mcsolActiveData.reduce((sum, d) => sum + d.activeUsers, 0),
+      mcsolExpired: mcsolExpiredData.reduce((sum, d) => sum + d.expiredUsers, 0),
+      highExpiredDealers
     };
   }, [historicalData]);
 
@@ -267,49 +274,81 @@ const HistoricalData = () => {
       )}
 
       {selectedDate && historicalData && viewMode === "detailed" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Detailed Historical Data - {format(selectedDate, "PPP")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-3 font-semibold">Dealer</th>
-                    <th className="text-left p-3 font-semibold">Service</th>
-                    <th className="text-left p-3 font-semibold">Zone</th>
-                    <th className="text-right p-3 font-semibold">Active Users</th>
-                    <th className="text-right p-3 font-semibold">Expired Users</th>
-                    <th className="text-right p-3 font-semibold">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historicalData.map((dealer, index) => (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{dealer.dealer}</td>
-                      <td className="p-3">
-                        <Badge variant={dealer.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
-                          {dealer.service}
-                        </Badge>
-                      </td>
-                      <td className="p-3">{dealer.zone}</td>
-                      <td className="p-3 text-right font-bold text-green-600">
-                        {dealer.activeUsers.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right font-bold text-red-600">
-                        {dealer.expiredUsers.toLocaleString()}
-                      </td>
-                      <td className="p-3 text-right font-bold">
-                        {(dealer.activeUsers + dealer.expiredUsers).toLocaleString()}
-                      </td>
+        <div className="space-y-6">
+          {/* Active Users Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Users - {format(selectedDate, "PPP")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold">Dealer</th>
+                      <th className="text-left p-3 font-semibold">Service</th>
+                      <th className="text-left p-3 font-semibold">Zone</th>
+                      <th className="text-right p-3 font-semibold">Active Users</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {historicalData.active.map((dealer, index) => (
+                      <tr key={index} className="border-b hover:bg-gray-50">
+                        <td className="p-3 font-medium">{dealer.dealer}</td>
+                        <td className="p-3">
+                          <Badge variant={dealer.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
+                            {dealer.service}
+                          </Badge>
+                        </td>
+                        <td className="p-3">{dealer.zone}</td>
+                        <td className="p-3 text-right font-bold text-green-600">
+                          {dealer.activeUsers.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Expired Users Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Expired Users - {format(selectedDate, "PPP")}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-3 font-semibold">Dealer</th>
+                      <th className="text-left p-3 font-semibold">Service</th>
+                      <th className="text-left p-3 font-semibold">Zone</th>
+                      <th className="text-right p-3 font-semibold">Expired Users</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historicalData.expired.map((dealer, index) => (
+                      <tr key={index} className="border-b hover:bg-gray-50">
+                        <td className="p-3 font-medium">{dealer.dealer}</td>
+                        <td className="p-3">
+                          <Badge variant={dealer.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
+                            {dealer.service}
+                          </Badge>
+                        </td>
+                        <td className="p-3">{dealer.zone}</td>
+                        <td className="p-3 text-right font-bold text-red-600">
+                          {dealer.expiredUsers.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
