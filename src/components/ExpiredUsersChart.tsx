@@ -1,16 +1,16 @@
 
 import { useEffect, useRef } from 'react';
 
-interface DealerData {
+interface ExpiredDealerData {
   dealer: string;
   service: string;
   zone: string;
-  activeUsers: number;
   expiredUsers: number;
+  timestamp?: string;
 }
 
 interface Props {
-  data: DealerData[];
+  data: ExpiredDealerData[];
 }
 
 const ExpiredUsersChart = ({ data }: Props) => {
@@ -48,7 +48,7 @@ const ExpiredUsersChart = ({ data }: Props) => {
       const x = padding.left + index * barWidth;
       const y = padding.top + chartHeight - barHeight;
 
-      // Color based on service
+      // Color based on service - TES: blue, McSOL: red
       const color = dealer.service.toLowerCase().includes('tes') ? '#3B82F6' : '#EF4444';
       
       // Draw bar
@@ -70,7 +70,7 @@ const ExpiredUsersChart = ({ data }: Props) => {
       ctx.translate(x + barWidth / 2, padding.top + chartHeight + 20);
       ctx.rotate(-Math.PI / 4);
       ctx.textAlign = 'right';
-      ctx.fillText(dealer.dealer, 0, 0);
+      ctx.fillText(dealer.dealer.length > 15 ? dealer.dealer.substring(0, 12) + '...' : dealer.dealer, 0, 0);
       ctx.restore();
     });
 
@@ -104,7 +104,7 @@ const ExpiredUsersChart = ({ data }: Props) => {
     ctx.fillStyle = '#1F2937';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Dealers with 30+ Expired Users', width / 2, 25);
+    ctx.fillText('Dealers with 30+ Expired Users (Auto-Updated)', width / 2, 25);
 
     // Draw legend
     const legendY = height - 20;
@@ -136,6 +136,9 @@ const ExpiredUsersChart = ({ data }: Props) => {
         className="w-full h-96 border rounded"
         style={{ maxWidth: '100%' }}
       />
+      <div className="mt-2 text-sm text-gray-600 text-center">
+        Chart updates automatically every 30 seconds • Showing {data.length} dealers
+      </div>
     </div>
   );
 };

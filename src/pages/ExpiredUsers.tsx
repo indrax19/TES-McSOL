@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserX, Search, AlertTriangle } from "lucide-react";
-import { fetchSheetData, getHighExpiredDealers } from "@/services/googleSheetsService";
-import { useState, useMemo } from "react";
+import { UserX, Search, AlertTriangle, RefreshCw } from "lucide-react";
+import { fetchExpiredUsersData, getExpiredZoneSummaries, getHighExpiredDealers, storeHistoricalData, fetchActiveUsersData, startAutoRefresh, stopAutoRefresh } from "@/services/googleSheetsService";
+import { useState, useMemo, useEffect } from "react";
 import ExpiredUsersChart from "@/components/ExpiredUsersChart";
 
 const ExpiredUsers = () => {
@@ -14,15 +14,41 @@ const ExpiredUsers = () => {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [zoneFilter, setZoneFilter] = useState("all");
   const [sortBy, setSortBy] = useState("expiredUsers");
+  const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  const { data: dealerData = [], isLoading } = useQuery({
-    queryKey: ['sheetData'],
-    queryFn: fetchSheetData,
-    refetchInterval: 30000,
+  const { data: expiredData = [], isLoading, refetch } = useQuery({
+    queryKey: ['expiredUsersData'],
+    queryFn: fetchExpiredUsersData,
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
   });
 
+  // Auto-refresh setup
+  useEffect(() => {
+    const refreshData = async () => {
+      try {
+        await refetch();
+        setLastRefresh(new Date());
+        
+        // Store historical data
+        const [currentActiveData, currentExpiredData] = await Promise.all([
+          fetchActiveUsersData(),
+          fetchExpiredUsersData()
+        ]);
+        storeHistoricalData(currentActiveData, currentExpiredData);
+      } catch (error) {
+        console.error('Auto-refresh failed:', error);
+      }
+    };
+
+    const interval = startAutoRefresh(refreshData, 30000);
+    
+    return () => {
+      stopAutoRefresh();
+    };
+  }, [refetch]);
+
   const filteredAndSortedData = useMemo(() => {
-    let filtered = dealerData.filter(dealer => {
+    let filtered = expiredData.filter(dealer => {
       const matchesSearch = dealer.dealer.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesService = serviceFilter === "all" || dealer.service.toLowerCase().includes(serviceFilter.toLowerCase());
       const matchesZone = zoneFilter === "all" || dealer.zone === zoneFilter;
@@ -44,11 +70,12 @@ const ExpiredUsers = () => {
     });
 
     return filtered;
-  }, [dealerData, searchTerm, serviceFilter, zoneFilter, sortBy]);
+  }, [expiredData, searchTerm, serviceFilter, zoneFilter, sortBy]);
 
   const totalExpiredUsers = filteredAndSortedData.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
   const highExpiredDealers = getHighExpiredDealers(filteredAndSortedData);
-  const uniqueZones = Array.from(new Set(dealerData.map(d => d.zone))).filter(Boolean);
+  const uniqueZones = Array.from(new Set(expiredData.map(d => d.zone))).filter(Boolean);
+  const zoneSummaries = getExpiredZoneSummaries(expiredData);
 
   if (isLoading) {
     return (
@@ -63,7 +90,12 @@ const ExpiredUsers = () => {
     <div className="space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Expired Users Dashboard</h1>
-        <p className="text-gray-600">Monitor dealers with expired user accounts</p>
+        <p className="text-gray-600">Monitor dealers with expired user accounts (TES & McSOL only)</p>
+        <div className="flex items-center justify-center gap-2 mt-2 text-sm text-gray-500">
+          <RefreshCw className="h-4 w-4" />
+          <span>Last updated: {lastRefresh.toLocaleTimeString()}</span>
+          <span>• Auto-refresh: 30s</span>
+        </div>
       </div>
 
       {/* Summary Stats */}
@@ -90,28 +122,55 @@ const ExpiredUsers = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dealers with Expired</CardTitle>
+            <CardTitle className="text-sm font-medium">TES Expired Users</CardTitle>
             <UserX className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">
-              {filteredAndSortedData.filter(d => d.expiredUsers > 0).length}
+              {filteredAndSortedData.filter(d => d.service.toLowerCase().includes('tes')).reduce((sum, d) => sum + d.expiredUsers, 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Average per Dealer</CardTitle>
+            <CardTitle className="text-sm font-medium">McSOL Expired Users</CardTitle>
             <UserX className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-600">
-              {filteredAndSortedData.length > 0 ? Math.round(totalExpiredUsers / filteredAndSortedData.length) : 0}
+              {filteredAndSortedData.filter(d => d.service.toLowerCase().includes('mcsol')).reduce((sum, d) => sum + d.expiredUsers, 0).toLocaleString()}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Zone Summaries */}
+      {zoneSummaries.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Zone-wise Expired Users Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {zoneSummaries.map((summary, index) => (
+                <div key={index} className="p-4 border rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="font-semibold">{summary.zone}</h3>
+                    <Badge variant={summary.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
+                      {summary.service}
+                    </Badge>
+                  </div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {summary.totalExpired.toLocaleString()}
+                  </div>
+                  <p className="text-sm text-gray-600">Expired Users</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Chart for High Expired Dealers */}
       {highExpiredDealers.length > 0 && (
