@@ -7,40 +7,65 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { fetchExpiredUsersData, getExpiredZoneSummaries, getHistoricalData, getAvailableDates, type ExpiredDealerData, type ZoneSummary } from "@/services/googleSheetsService";
+
+// Mock data service - replace with actual service
+const mockData = {
+  currentDate: [
+    { zone: "Zone A", service: "TES", totalExpired: 150 },
+    { zone: "Zone B", service: "TES", totalExpired: 120 },
+    { zone: "Zone C", service: "TES", totalExpired: 200 },
+    { zone: "Zone A", service: "McSOL", totalExpired: 80 },
+    { zone: "Zone B", service: "McSOL", totalExpired: 95 },
+    { zone: "Zone C", service: "McSOL", totalExpired: 110 },
+  ],
+  historicalData: {
+    "2024-06-15": [
+      { zone: "Zone A", service: "TES", totalExpired: 140 },
+      { zone: "Zone B", service: "TES", totalExpired: 110 },
+      { zone: "Zone C", service: "TES", totalExpired: 180 },
+      { zone: "Zone A", service: "McSOL", totalExpired: 75 },
+      { zone: "Zone B", service: "McSOL", totalExpired: 90 },
+      { zone: "Zone C", service: "McSOL", totalExpired: 100 },
+    ],
+    "2024-06-14": [
+      { zone: "Zone A", service: "TES", totalExpired: 135 },
+      { zone: "Zone B", service: "TES", totalExpired: 115 },
+      { zone: "Zone C", service: "TES", totalExpired: 190 },
+      { zone: "Zone A", service: "McSOL", totalExpired: 70 },
+      { zone: "Zone B", service: "McSOL", totalExpired: 85 },
+      { zone: "Zone C", service: "McSOL", totalExpired: 105 },
+    ]
+  }
+};
+
+const getExpiredZoneSummaries = (data: any[]) => {
+  return data.map(item => ({
+    zone: item.zone,
+    service: item.service,
+    totalExpired: item.totalExpired
+  }));
+};
+
+const getAvailableDates = () => {
+  return Object.keys(mockData.historicalData);
+};
 
 const DataComparison = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [currentData, setCurrentData] = useState<ExpiredDealerData[]>([]);
-  const [previousData, setPreviousData] = useState<ExpiredDealerData[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [currentData, setCurrentData] = useState(mockData.currentDate);
+  const [previousData, setPreviousData] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const availableDates = getAvailableDates();
   const currentDate = new Date();
 
-  // Fetch current data on component mount
-  useEffect(() => {
-    const fetchCurrentData = async () => {
-      try {
-        const data = await fetchExpiredUsersData();
-        setCurrentData(data);
-      } catch (err) {
-        console.error('Error fetching current data:', err);
-        setError('Failed to fetch current data');
-      }
-    };
-
-    fetchCurrentData();
-  }, []);
-
   // Fetch previous data when date is selected
   useEffect(() => {
     if (selectedDate) {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const historicalData = getHistoricalData(dateStr);
-      if (historicalData?.expired) {
-        setPreviousData(historicalData.expired);
+      const historicalData = mockData.historicalData[dateStr as keyof typeof mockData.historicalData];
+      if (historicalData) {
+        setPreviousData(historicalData);
         setError(null);
       } else {
         setPreviousData([]);
@@ -130,7 +155,7 @@ const DataComparison = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Compare Data – Current vs Previous</h1>
         <p className="text-gray-600">Compare current date data with any selected previous date</p>

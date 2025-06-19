@@ -1,6 +1,6 @@
 
 import { NavLink } from "react-router-dom";
-import { BarChart3, Users, UserX, Calendar, Home, Shield, LogOut } from "lucide-react";
+import { BarChart3, Users, UserX, Calendar, Home, Shield, LogOut, GitCompare } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
@@ -12,6 +12,7 @@ const Navigation = () => {
     { to: "/active-users", icon: Users, label: "Active Users" },
     { to: "/expired-users", icon: UserX, label: "Expired Users" },
     { to: "/historical", icon: Calendar, label: "Historical Data" },
+    { to: "/compare", icon: GitCompare, label: "Compare Data" },
   ];
 
   const adminItems = [

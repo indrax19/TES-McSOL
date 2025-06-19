@@ -1,3 +1,4 @@
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster";
@@ -51,6 +52,7 @@ const AppContent = () => {
       <Route path="/active-users" element={<><Navigation /><ActiveUsers /></>} />
       <Route path="/expired-users" element={<><Navigation /><ExpiredUsers /></>} />
       <Route path="/historical" element={<><Navigation /><HistoricalData /></>} />
+      <Route path="/compare" element={<><Navigation /><DataComparison /></>} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={
