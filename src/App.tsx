@@ -1,99 +1,85 @@
 
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import Navigation from "./components/Navigation";
-import LoginPage from "./components/LoginPage";
-import Dashboard from "./pages/Dashboard";
-import ActiveUsers from "./pages/ActiveUsers";
-import ExpiredUsers from "./pages/ExpiredUsers";
-import HistoricalData from "./pages/HistoricalData";
-import AdminDashboard from "./pages/AdminDashboard";
-import UserManagement from "./pages/UserManagement";
-import NotFound from "./pages/NotFound";
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import LoginPage from '@/components/LoginPage';
+import AdminLayout from '@/components/AdminLayout';
+import Navigation from '@/components/Navigation';
+import Index from '@/pages/Index';
+import ActiveUsers from '@/pages/ActiveUsers';
+import ExpiredUsers from '@/pages/ExpiredUsers';
+import HistoricalData from '@/pages/HistoricalData';
+import AdminDashboard from '@/pages/AdminDashboard';
+import UserManagement from '@/pages/UserManagement';
+import DataComparison from '@/pages/DataComparison';
+import NotFound from '@/pages/NotFound';
 
-const queryClient = new QueryClient();
-
+// Protected Route Component
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
-  return currentUser ? <>{children}</> : <Navigate to="/login" />;
+  return currentUser ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
+// Admin Route Component
 const AdminRoute = ({ children }: { children: React.ReactNode }) => {
   const { currentUser } = useAuth();
-  return currentUser?.role === 'admin' ? <>{children}</> : <Navigate to="/login" />;
+  return currentUser?.role === 'admin' ? <>{children}</> : <Navigate to="/" replace />;
 };
 
+// Main App Content
 const AppContent = () => {
   const { currentUser } = useAuth();
 
   if (!currentUser) {
-    return (
-      <Routes>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/login" />} />
-      </Routes>
-    );
+    return <LoginPage />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <main className="container mx-auto px-4 py-8">
-        <Routes>
-          <Route path="/login" element={<Navigate to="/" />} />
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/active-users" element={
-            <ProtectedRoute>
-              <ActiveUsers />
-            </ProtectedRoute>
-          } />
-          <Route path="/expired-users" element={
-            <ProtectedRoute>
-              <ExpiredUsers />
-            </ProtectedRoute>
-          } />
-          <Route path="/historical" element={
-            <ProtectedRoute>
-              <HistoricalData />
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
-            <AdminRoute>
-              <AdminDashboard />
-            </AdminRoute>
-          } />
-          <Route path="/admin/users" element={
-            <AdminRoute>
-              <UserManagement />
-            </AdminRoute>
-          } />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </main>
-    </div>
+    <Routes>
+      {/* Public Routes (after login) */}
+      <Route path="/" element={<><Navigation /><Index /></>} />
+      <Route path="/active-users" element={<><Navigation /><ActiveUsers /></>} />
+      <Route path="/expired-users" element={<><Navigation /><ExpiredUsers /></>} />
+      <Route path="/historical" element={<><Navigation /><HistoricalData /></>} />
+      
+      {/* Admin Routes */}
+      <Route path="/admin" element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminDashboard />
+          </AdminLayout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/users" element={
+        <AdminRoute>
+          <AdminLayout>
+            <UserManagement />
+          </AdminLayout>
+        </AdminRoute>
+      } />
+      <Route path="/admin/compare" element={
+        <AdminRoute>
+          <AdminLayout>
+            <DataComparison />
+          </AdminLayout>
+        </AdminRoute>
+      } />
+      
+      {/* Fallback */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
+function App() {
+  return (
+    <Router>
       <AuthProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <AppContent />
+        <Toaster />
       </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+    </Router>
+  );
+}
 
 export default App;

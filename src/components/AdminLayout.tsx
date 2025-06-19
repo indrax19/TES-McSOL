@@ -2,7 +2,7 @@
 import React from 'react';
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Users, BarChart3 } from "lucide-react";
+import { LogOut, Users, BarChart3, GitCompare } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -11,6 +11,7 @@ const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navItems = [
     { to: "/admin", icon: BarChart3, label: "Dashboard" },
     { to: "/admin/users", icon: Users, label: "User Management" },
+    { to: "/admin/compare", icon: GitCompare, label: "Compare Data" },
   ];
 
   return (
