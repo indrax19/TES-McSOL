@@ -14,6 +14,7 @@ import AdminDashboard from '@/pages/AdminDashboard';
 import UserManagement from '@/pages/UserManagement';
 import DataComparison from '@/pages/DataComparison';
 import NotFound from '@/pages/NotFound';
+import Dashboard from './pages/Dashboard';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -48,7 +49,7 @@ const AppContent = () => {
   return (
     <Routes>
       {/* Public Routes (after login) */}
-      <Route path="/" element={<><Navigation /><Index /></>} />
+      <Route path="/" element={<><Navigation /><Dashboard /></>} />
       <Route path="/active-users" element={<><Navigation /><ActiveUsers /></>} />
       <Route path="/expired-users" element={<><Navigation /><ExpiredUsers /></>} />
       <Route path="/historical" element={<><Navigation /><HistoricalData /></>} />

@@ -75,9 +75,7 @@ const LoginPage = () => {
               {isLoading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-4 text-sm text-gray-600 text-center">
-            Default credentials: admin / admin123
-          </div>
+          
         </CardContent>
       </Card>
     </div>

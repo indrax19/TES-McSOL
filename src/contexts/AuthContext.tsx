@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const DEFAULT_ADMIN = {
   id: 'admin-1',
   username: 'admin',
-  name: 'System Administrator',
+  name: 'Administrator',
   role: 'admin' as const,
   createdAt: new Date().toISOString(),
   password: 'admin123'

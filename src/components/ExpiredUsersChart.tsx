@@ -104,7 +104,7 @@ const ExpiredUsersChart = ({ data }: Props) => {
     ctx.fillStyle = '#1F2937';
     ctx.font = 'bold 16px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Dealers with 30+ Expired Users (Auto-Updated)', width / 2, 25);
+    ctx.fillText('Dealers with 20+ Expired Users (Auto-Updated)', width / 2, 25);
 
     // Draw legend
     const legendY = height - 20;
@@ -124,7 +124,7 @@ const ExpiredUsersChart = ({ data }: Props) => {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 text-gray-500">
-        No dealers with 30+ expired users found
+        No dealers with 20+ expired users found
       </div>
     );
   }
