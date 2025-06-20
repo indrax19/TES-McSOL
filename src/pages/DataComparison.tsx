@@ -8,21 +8,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, TrendingUp, TrendingDown, Minus, Loader2 } from "lucide-react";
-import { getHistoricalData, getAvailableDates } from "@/services/googleSheetsService";
+import { getHistoricalData, getAvailableDates, ActiveDealerData, ExpiredDealerData } from "@/services/googleSheetsService";
 import { format, parse } from "date-fns";
-
-interface DealerData {
-  dealer: string;
-  service: string;
-  zone: string;
-  activeUsers: number;
-  expiredUsers: number;
-}
-
-interface HistoricalData {
-  active: DealerData[];
-  expired: DealerData[];
-}
 
 interface ZoneSummary {
   zone: string;
@@ -73,26 +60,31 @@ const DataComparison = () => {
 
     const currentUsers = userType === 'active' ? currentData.active : currentData.expired;
     const prevUsers = userType === 'active' ? historicalData.active : historicalData.expired;
-    const field = userType === 'active' ? 'activeUsers' : 'expiredUsers';
 
-    // Calculate totals
-    const totalCurrentUsers = currentUsers.reduce((sum, dealer) => sum + dealer[field], 0);
-    const totalPrevUsers = prevUsers.reduce((sum, dealer) => sum + dealer[field], 0);
+    // Calculate totals based on user type
+    const totalCurrentUsers = userType === 'active' 
+      ? (currentUsers as ActiveDealerData[]).reduce((sum, dealer) => sum + dealer.activeUsers, 0)
+      : (currentUsers as ExpiredDealerData[]).reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
+    
+    const totalPrevUsers = userType === 'active'
+      ? (prevUsers as ActiveDealerData[]).reduce((sum, dealer) => sum + dealer.activeUsers, 0)
+      : (prevUsers as ExpiredDealerData[]).reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
+    
     const usersDifference = totalCurrentUsers - totalPrevUsers;
 
     // High expired dealers (for expired users only)
     const highExpiredDealersCurrent = userType === 'expired' 
-      ? currentUsers.filter(d => d.expiredUsers >= 20).length 
+      ? (currentUsers as ExpiredDealerData[]).filter(d => d.expiredUsers >= 20).length 
       : 0;
     const highExpiredDealersPrev = userType === 'expired' 
-      ? prevUsers.filter(d => d.expiredUsers >= 20).length 
+      ? (prevUsers as ExpiredDealerData[]).filter(d => d.expiredUsers >= 20).length 
       : 0;
 
     // Unique zones
     const uniqueZones = Array.from(new Set(currentUsers.map(d => d.zone))).filter(Boolean);
 
     // Zone summaries (for expired users only)
-    const getExpiredZoneSummaries = (data: DealerData[]): ZoneSummary[] => {
+    const getExpiredZoneSummaries = (data: ExpiredDealerData[]): ZoneSummary[] => {
       const zoneMap: { [key: string]: number } = {};
       data.forEach(dealer => {
         if (dealer.zone) {
@@ -104,14 +96,23 @@ const DataComparison = () => {
         totalExpiredUsers,
       }));
     };
-    const zoneSummariesCurrent = userType === 'expired' ? getExpiredZoneSummaries(currentUsers) : [];
-    const zoneSummariesPrev = userType === 'expired' ? getExpiredZoneSummaries(prevUsers) : [];
+    
+    const zoneSummariesCurrent = userType === 'expired' 
+      ? getExpiredZoneSummaries(currentUsers as ExpiredDealerData[]) 
+      : [];
+    const zoneSummariesPrev = userType === 'expired' 
+      ? getExpiredZoneSummaries(prevUsers as ExpiredDealerData[]) 
+      : [];
 
-    // Sort data by field (descending)
-    const sortedCurrentUsers = [...currentUsers].sort((a, b) => b[field] - a[field]);
+    // Sort data by appropriate field (descending)
+    const sortedCurrentUsers = userType === 'active'
+      ? [...(currentUsers as ActiveDealerData[])].sort((a, b) => b.activeUsers - a.activeUsers)
+      : [...(currentUsers as ExpiredDealerData[])].sort((a, b) => b.expiredUsers - a.expiredUsers);
 
     // Calculate max expired users for progress bar (for expired users only)
-    const maxExpiredUsers = userType === 'expired' ? Math.max(...sortedCurrentUsers.map(d => d.expiredUsers), 1) : 1;
+    const maxExpiredUsers = userType === 'expired' 
+      ? Math.max(...(sortedCurrentUsers as ExpiredDealerData[]).map(d => d.expiredUsers), 1) 
+      : 1;
 
     return {
       totalCurrentUsers,
@@ -386,11 +387,19 @@ const DataComparison = () => {
                     {metrics.sortedCurrentUsers.map((dealer, index) => {
                       const prevUsers = userType === 'active' ? historicalData.active : historicalData.expired;
                       const prevDealer = prevUsers.find(d => d.dealer === dealer.dealer && d.service === dealer.service && d.zone === dealer.zone);
-                      const field = userType === 'active' ? 'activeUsers' : 'expiredUsers';
-                      const change = dealer[field] - (prevDealer?.[field] || 0);
+                      
+                      const currentValue = userType === 'active' 
+                        ? (dealer as ActiveDealerData).activeUsers 
+                        : (dealer as ExpiredDealerData).expiredUsers;
+                      const prevValue = userType === 'active'
+                        ? (prevDealer as ActiveDealerData)?.activeUsers || 0
+                        : (prevDealer as ExpiredDealerData)?.expiredUsers || 0;
+                      const change = currentValue - prevValue;
+                      
                       const progressWidth = userType === 'expired'
-                        ? Math.min((dealer.expiredUsers / metrics.maxExpiredUsers) * 100, 100)
+                        ? Math.min(((dealer as ExpiredDealerData).expiredUsers / metrics.maxExpiredUsers) * 100, 100)
                         : 0;
+                        
                       return (
                         <tr key={index} className="border-b hover:bg-gray-50">
                           <td className="p-3 font-medium">{dealer.dealer}</td>
@@ -401,12 +410,12 @@ const DataComparison = () => {
                           </td>
                           <td className="p-3">{dealer.zone}</td>
                           <td className={`p-3 text-right font-bold ${userType === 'active' ? 'text-green-600' : 'text-red-600'}`}>
-                            {dealer[field].toLocaleString()}
+                            {currentValue.toLocaleString()}
                           </td>
                           <td className="p-3 text-right font-bold text-gray-600">
-                            {(prevDealer?.[field] || 0).toLocaleString()}
+                            {prevValue.toLocaleString()}
                           </td>
-                          <td className={`p-3 text-right font-bold ${getChangeColor(dealer[field], prevDealer?.[field] || 0)}`}>
+                          <td className={`p-3 text-right font-bold ${getChangeColor(currentValue, prevValue)}`}>
                             {change > 0 ? '+' : ''}{change.toLocaleString()}
                           </td>
                           {userType === 'expired' && (

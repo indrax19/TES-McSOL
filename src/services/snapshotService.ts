@@ -101,6 +101,19 @@ export const getSnapshotsByMonth = (monthYear: string): SnapshotData[] => {
   return monthSnapshots;
 };
 
+export const getLatestSnapshotForMonth = (monthYear: string): SnapshotData | null => {
+  const metadata = getAllSnapshotMetadata();
+  const monthSnapshots = metadata
+    .filter(meta => meta.monthYear === monthYear)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  
+  if (monthSnapshots.length > 0) {
+    return getSnapshotByFilename(monthSnapshots[0].filename);
+  }
+  
+  return null;
+};
+
 export const getFirstDaySnapshot = (): SnapshotData | null => {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const firstDayDate = `${currentMonth}-01`;
