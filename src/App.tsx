@@ -1,3 +1,4 @@
+
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/toaster";
@@ -13,6 +14,7 @@ import AdminDashboard from '@/pages/AdminDashboard';
 import UserManagement from '@/pages/UserManagement';
 import DataComparison from '@/pages/DataComparison';
 import CompareMonths from '@/pages/CompareMonths';
+import SnapshotDashboard from '@/pages/SnapshotDashboard';
 import NotFound from '@/pages/NotFound';
 import Dashboard from './pages/Dashboard';
 
@@ -55,6 +57,7 @@ const AppContent = () => {
       <Route path="/historical" element={<><Navigation /><HistoricalData /></>} />
       <Route path="/compare" element={<><Navigation /><DataComparison /></>} />
       <Route path="/compare-months" element={<><Navigation /><CompareMonths /></>} />
+      <Route path="/snapshots" element={<><Navigation /><SnapshotDashboard /></>} />
       
       {/* Admin Routes */}
       <Route path="/admin" element={
