@@ -17,6 +17,7 @@ const Navigation = () => {
     { to: "/expired-users", icon: UserX, label: "Expired Users" },
     { to: "/historical", icon: Calendar, label: "Historical Data" },
     { to: "/compare", icon: GitCompare, label: "Compare Data" },
+    { to: "/compare-months", icon: GitCompare, label: "Compare Months" },
   ];
 
   const adminItems = [
