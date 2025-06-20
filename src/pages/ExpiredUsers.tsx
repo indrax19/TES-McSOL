@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UserX, Search, AlertTriangle, RefreshCw } from "lucide-react";
+import { UserX, Search, AlertTriangle, RefreshCw, TrendingUp } from "lucide-react";
 import { fetchExpiredUsersData, getExpiredZoneSummaries, getHighExpiredDealers, storeHistoricalData, fetchActiveUsersData, startAutoRefresh, stopAutoRefresh } from "@/services/googleSheetsService";
 import { useState, useMemo, useEffect } from "react";
 import ExpiredUsersChart from "@/components/ExpiredUsersChart";
@@ -19,7 +19,7 @@ const ExpiredUsers = () => {
   const { data: expiredData = [], isLoading, refetch } = useQuery({
     queryKey: ['expiredUsersData'],
     queryFn: fetchExpiredUsersData,
-    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    refetchInterval: 30000,
   });
 
   // Auto-refresh setup
@@ -55,8 +55,15 @@ const ExpiredUsers = () => {
       return matchesSearch && matchesService && matchesZone;
     });
 
-    // Sort by selected criteria
-    filtered.sort((a, b) => {
+    // Separate high-risk dealers (20+ expired users)
+    const highRiskDealers = filtered.filter(dealer => dealer.expiredUsers >= 20);
+    const normalDealers = filtered.filter(dealer => dealer.expiredUsers < 20);
+
+    // Sort high-risk dealers by expired users (descending)
+    highRiskDealers.sort((a, b) => b.expiredUsers - a.expiredUsers);
+
+    // Sort normal dealers by selected criteria
+    normalDealers.sort((a, b) => {
       switch (sortBy) {
         case "expiredUsers":
           return b.expiredUsers - a.expiredUsers;
@@ -69,11 +76,12 @@ const ExpiredUsers = () => {
       }
     });
 
-    return filtered;
+    // Return high-risk dealers first, then normal dealers
+    return [...highRiskDealers, ...normalDealers];
   }, [expiredData, searchTerm, serviceFilter, zoneFilter, sortBy]);
 
   const totalExpiredUsers = filteredAndSortedData.reduce((sum, dealer) => sum + dealer.expiredUsers, 0);
-  const highExpiredDealers = getHighExpiredDealers(filteredAndSortedData);
+  const highRiskDealers = filteredAndSortedData.filter(dealer => dealer.expiredUsers >= 20);
   const uniqueZones = Array.from(new Set(expiredData.map(d => d.zone))).filter(Boolean);
   const zoneSummaries = getExpiredZoneSummaries(expiredData);
 
@@ -110,13 +118,14 @@ const ExpiredUsers = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="border-orange-200 bg-orange-50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">High Risk Dealers (30+)</CardTitle>
+            <CardTitle className="text-sm font-medium">High Risk Dealers (20+)</CardTitle>
             <AlertTriangle className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{highExpiredDealers.length}</div>
+            <div className="text-2xl font-bold text-orange-600">{highRiskDealers.length}</div>
+            <p className="text-xs text-orange-600 mt-1">Critical attention needed</p>
           </CardContent>
         </Card>
 
@@ -144,6 +153,48 @@ const ExpiredUsers = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* High-Risk Dealers Alert */}
+      {highRiskDealers.length > 0 && (
+        <Card className="border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="text-red-700 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              High-Risk Dealers Alert (20+ Expired Users)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {highRiskDealers.slice(0, 6).map((dealer, index) => (
+                <div key={index} className="p-4 border border-red-200 rounded-lg bg-white">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-semibold text-gray-900 text-sm">{dealer.dealer}</h3>
+                    <Badge variant="destructive" className="text-xs">
+                      HIGH RISK
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <Badge variant={dealer.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
+                      {dealer.service}
+                    </Badge>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-red-600">
+                        {dealer.expiredUsers.toLocaleString()}
+                      </div>
+                      <div className="text-xs text-gray-600">{dealer.zone}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {highRiskDealers.length > 6 && (
+              <p className="text-center text-red-600 mt-4 text-sm">
+                +{highRiskDealers.length - 6} more high-risk dealers in the table below
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Zone Summaries */}
       {zoneSummaries.length > 0 && (
@@ -173,13 +224,13 @@ const ExpiredUsers = () => {
       )}
 
       {/* Chart for High Expired Dealers */}
-      {highExpiredDealers.length > 0 && (
+      {highRiskDealers.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Dealers with 30+ Expired Users</CardTitle>
+            <CardTitle>High-Risk Dealers Chart (20+ Expired Users)</CardTitle>
           </CardHeader>
           <CardContent>
-            <ExpiredUsersChart data={highExpiredDealers} />
+            <ExpiredUsersChart data={highRiskDealers} />
           </CardContent>
         </Card>
       )}
@@ -258,12 +309,17 @@ const ExpiredUsers = () => {
               </thead>
               <tbody>
                 {filteredAndSortedData.map((dealer, index) => {
-                  const riskLevel = dealer.expiredUsers >= 30 ? "High" : dealer.expiredUsers >= 15 ? "Medium" : "Low";
-                  const riskColor = dealer.expiredUsers >= 30 ? "text-red-600" : dealer.expiredUsers >= 15 ? "text-orange-600" : "text-green-600";
+                  const isHighRisk = dealer.expiredUsers >= 20;
+                  const riskLevel = dealer.expiredUsers >= 20 ? "HIGH" : dealer.expiredUsers >= 10 ? "Medium" : "Low";
+                  const riskColor = dealer.expiredUsers >= 20 ? "text-red-600" : dealer.expiredUsers >= 10 ? "text-orange-600" : "text-green-600";
+                  const rowBgColor = isHighRisk ? "bg-red-50 border-red-200" : "hover:bg-gray-50";
                   
                   return (
-                    <tr key={index} className="border-b hover:bg-gray-50">
-                      <td className="p-3 font-medium">{dealer.dealer}</td>
+                    <tr key={index} className={`border-b ${rowBgColor}`}>
+                      <td className="p-3 font-medium flex items-center gap-2">
+                        {isHighRisk && <TrendingUp className="h-4 w-4 text-red-600" />}
+                        {dealer.dealer}
+                      </td>
                       <td className="p-3">
                         <Badge variant={dealer.service.toLowerCase().includes('tes') ? 'default' : 'secondary'}>
                           {dealer.service}
@@ -274,12 +330,15 @@ const ExpiredUsers = () => {
                         {dealer.expiredUsers.toLocaleString()}
                       </td>
                       <td className="p-3">
-                        <span className={`font-medium ${riskColor}`}>{riskLevel}</span>
+                        <span className={`font-medium ${riskColor}`}>
+                          {riskLevel}
+                          {isHighRisk && <AlertTriangle className="inline-block h-4 w-4 ml-1" />}
+                        </span>
                       </td>
                       <td className="p-3 text-right">
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div 
-                            className="bg-red-600 h-2 rounded-full" 
+                            className={`h-2 rounded-full ${isHighRisk ? 'bg-red-600' : 'bg-orange-400'}`}
                             style={{ 
                               width: `${Math.min((dealer.expiredUsers / Math.max(...filteredAndSortedData.map(d => d.expiredUsers))) * 100, 100)}%` 
                             }}
