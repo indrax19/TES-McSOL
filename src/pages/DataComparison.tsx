@@ -4,81 +4,64 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { CalendarIcon, TrendingUp, TrendingDown, Minus, Camera, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-
-// Mock data service - replace with actual service
-const mockData = {
-  currentDate: [
-    { zone: "Zone A", service: "TES", totalExpired: 150 },
-    { zone: "Zone B", service: "TES", totalExpired: 120 },
-    { zone: "Zone C", service: "TES", totalExpired: 200 },
-    { zone: "Zone A", service: "McSOL", totalExpired: 80 },
-    { zone: "Zone B", service: "McSOL", totalExpired: 95 },
-    { zone: "Zone C", service: "McSOL", totalExpired: 110 },
-  ],
-  historicalData: {
-    "2024-06-15": [
-      { zone: "Zone A", service: "TES", totalExpired: 140 },
-      { zone: "Zone B", service: "TES", totalExpired: 110 },
-      { zone: "Zone C", service: "TES", totalExpired: 180 },
-      { zone: "Zone A", service: "McSOL", totalExpired: 75 },
-      { zone: "Zone B", service: "McSOL", totalExpired: 90 },
-      { zone: "Zone C", service: "McSOL", totalExpired: 100 },
-    ],
-    "2024-06-14": [
-      { zone: "Zone A", service: "TES", totalExpired: 135 },
-      { zone: "Zone B", service: "TES", totalExpired: 115 },
-      { zone: "Zone C", service: "TES", totalExpired: 190 },
-      { zone: "Zone A", service: "McSOL", totalExpired: 70 },
-      { zone: "Zone B", service: "McSOL", totalExpired: 85 },
-      { zone: "Zone C", service: "McSOL", totalExpired: 105 },
-    ]
-  }
-};
-
-const getExpiredZoneSummaries = (data: any[]) => {
-  return data.map(item => ({
-    zone: item.zone,
-    service: item.service,
-    totalExpired: item.totalExpired
-  }));
-};
-
-const getAvailableDates = () => {
-  return Object.keys(mockData.historicalData);
-};
+import { 
+  fetchExpiredUsersData, 
+  getExpiredZoneSummaries, 
+  getLatestSnapshotForDate, 
+  getAvailableSnapshotDates, 
+  createSnapshot,
+  type Snapshot 
+} from "@/services/googleSheetsService";
+import { useQuery } from "@tanstack/react-query";
 
 const DataComparison = () => {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [currentData, setCurrentData] = useState(mockData.currentDate);
-  const [previousData, setPreviousData] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isCreatingSnapshot, setIsCreatingSnapshot] = useState(false);
 
-  const availableDates = getAvailableDates();
+  // Fetch current data
+  const { data: currentExpiredData = [], refetch: refetchCurrent } = useQuery({
+    queryKey: ['currentExpiredData'],
+    queryFn: fetchExpiredUsersData,
+  });
+
+  const availableDates = getAvailableSnapshotDates();
   const currentDate = new Date();
+  const formattedSelectedDate = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+  const previousSnapshot = formattedSelectedDate ? getLatestSnapshotForDate(formattedSelectedDate) : null;
 
-  // Fetch previous data when date is selected
-  useEffect(() => {
-    if (selectedDate) {
-      const dateStr = format(selectedDate, 'yyyy-MM-dd');
-      const historicalData = mockData.historicalData[dateStr as keyof typeof mockData.historicalData];
-      if (historicalData) {
-        setPreviousData(historicalData);
-        setError(null);
-      } else {
-        setPreviousData([]);
-        setError('No data available for selected date');
-      }
+  // Create manual snapshot
+  const handleCreateSnapshot = async () => {
+    setIsCreatingSnapshot(true);
+    try {
+      await createSnapshot();
+      await refetchCurrent();
+      setError(null);
+      console.log('Snapshot created successfully');
+    } catch (error) {
+      console.error('Failed to create snapshot:', error);
+      setError('Failed to create snapshot');
+    } finally {
+      setIsCreatingSnapshot(false);
     }
-  }, [selectedDate]);
+  };
+
+  // Get current zone summaries
+  const currentZoneSummaries = useMemo(() => {
+    return getExpiredZoneSummaries(currentExpiredData);
+  }, [currentExpiredData]);
+
+  // Get previous zone summaries
+  const previousZoneSummaries = useMemo(() => {
+    if (!previousSnapshot) return [];
+    return getExpiredZoneSummaries(previousSnapshot.expiredData);
+  }, [previousSnapshot]);
 
   const comparisonData = useMemo(() => {
-    if (!currentData.length || !previousData.length) return { tes: [], mcsol: [] };
-
-    const currentZoneSummaries = getExpiredZoneSummaries(currentData);
-    const previousZoneSummaries = getExpiredZoneSummaries(previousData);
+    if (!currentZoneSummaries.length || !previousZoneSummaries.length) return { tes: [], mcsol: [] };
 
     const tesComparison: any[] = [];
     const mcsolComparison: any[] = [];
@@ -122,7 +105,7 @@ const DataComparison = () => {
     });
 
     return { tes: tesComparison, mcsol: mcsolComparison };
-  }, [currentData, previousData]);
+  }, [currentZoneSummaries, previousZoneSummaries]);
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
@@ -158,8 +141,39 @@ const DataComparison = () => {
     <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="text-center">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Compare Data – Current vs Previous</h1>
-        <p className="text-gray-600">Compare current date data with any selected previous date</p>
+        <p className="text-gray-600">Compare current Google Sheet data with any selected previous snapshot</p>
       </div>
+
+      {/* Snapshot Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Snapshot Management</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <Button 
+              onClick={handleCreateSnapshot}
+              disabled={isCreatingSnapshot}
+              className="flex items-center gap-2"
+            >
+              {isCreatingSnapshot ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Creating Snapshot...
+                </>
+              ) : (
+                <>
+                  <Camera className="h-4 w-4" />
+                  Take Manual Snapshot
+                </>
+              )}
+            </Button>
+            <div className="text-sm text-gray-600">
+              Snapshots stored: {availableDates.length} • Last update: {format(currentDate, "PPp")}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Date Selection */}
       <Card>
@@ -169,14 +183,14 @@ const DataComparison = () => {
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="flex flex-col space-y-2">
-              <label className="text-sm font-medium">Current Date (Auto):</label>
+              <label className="text-sm font-medium">Current Date (Live Data):</label>
               <div className="text-lg font-semibold text-blue-600">
                 {format(currentDate, "PPP")}
               </div>
             </div>
 
             <div className="flex flex-col space-y-2">
-              <label className="text-sm font-medium">Previous Date:</label>
+              <label className="text-sm font-medium">Previous Date (Snapshot):</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-64 justify-start text-left font-normal">
@@ -200,7 +214,7 @@ const DataComparison = () => {
             </div>
 
             <div className="text-sm text-gray-600">
-              Available dates: {availableDates.length} stored snapshots
+              Available snapshots: {availableDates.length} stored dates
             </div>
           </div>
         </CardContent>
@@ -214,7 +228,23 @@ const DataComparison = () => {
         </Card>
       )}
 
-      {!selectedDate && (
+      {availableDates.length === 0 && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Camera className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Snapshots Available</h3>
+            <p className="text-gray-600 mb-4">
+              Take your first snapshot to start comparing historical data.
+            </p>
+            <Button onClick={handleCreateSnapshot} disabled={isCreatingSnapshot}>
+              <Camera className="h-4 w-4 mr-2" />
+              Take First Snapshot
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {!selectedDate && availableDates.length > 0 && (
         <Card>
           <CardContent className="text-center py-12">
             <CalendarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -226,8 +256,63 @@ const DataComparison = () => {
         </Card>
       )}
 
-      {selectedDate && !error && (
+      {selectedDate && !previousSnapshot && (
+        <Card>
+          <CardContent className="text-center py-12">
+            <p className="text-gray-600">No snapshot available for {format(selectedDate, "PPP")}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedDate && previousSnapshot && (
         <>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Total Expired Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="text-sm text-gray-600">Previous</div>
+                    <div className="text-lg font-bold">{previousSnapshot.totalExpired.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">Current</div>
+                    <div className="text-lg font-bold text-red-600">
+                      {currentExpiredData.reduce((sum, d) => sum + d.expiredUsers, 0).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Total Active Users</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold text-green-600">
+                  {previousSnapshot.totalActive.toLocaleString()}
+                </div>
+                <p className="text-xs text-gray-600">From snapshot</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Dealer Count</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold text-blue-600">
+                  {previousSnapshot.dealerCount}
+                </div>
+                <p className="text-xs text-gray-600">Active dealers</p>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Comparison Tables */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* TES Expired Users */}
