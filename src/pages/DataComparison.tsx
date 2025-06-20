@@ -1,3 +1,4 @@
+
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,7 +62,7 @@ const DataComparison = () => {
       const latestDateStr = availableDates.sort().reverse()[0];
       setSelectedDate(parse(latestDateStr, 'yyyy-MM-dd', new Date()));
     }
-  }, [availableDates, isDatesLoading]);
+  }, [availableDates, isDatesLoading, selectedDate]);
 
   // Handle errors
   const error = datesError || currentError || historicalError;
@@ -80,8 +81,12 @@ const DataComparison = () => {
     const usersDifference = totalCurrentUsers - totalPrevUsers;
 
     // High expired dealers (for expired users only)
-    const highExpiredDealersCurrent = userType === 'expired' ? currentUsers.filter(d => d.expiredUsers >= 20).length : 0;
-    const highExpiredDealersPrev = userType === 'expired' ? prevUsers.filter(d => d.expiredUsers >= 20).length : 0;
+    const highExpiredDealersCurrent = userType === 'expired' 
+      ? currentUsers.filter(d => d.expiredUsers >= 20).length 
+      : 0;
+    const highExpiredDealersPrev = userType === 'expired' 
+      ? prevUsers.filter(d => d.expiredUsers >= 20).length 
+      : 0;
 
     // Unique zones
     const uniqueZones = Array.from(new Set(currentUsers.map(d => d.zone))).filter(Boolean);

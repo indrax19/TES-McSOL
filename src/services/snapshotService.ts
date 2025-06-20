@@ -1,13 +1,15 @@
 
-interface SnapshotData {
-  activeUsers: any[];
-  expiredUsers: any[];
+import { ActiveDealerData, ExpiredDealerData } from './googleSheetsService';
+
+export interface SnapshotData {
+  activeUsers: ActiveDealerData[];
+  expiredUsers: ExpiredDealerData[];
   timestamp: string;
   date: string;
   monthYear: string;
 }
 
-interface SnapshotMetadata {
+export interface SnapshotMetadata {
   filename: string;
   timestamp: string;
   date: string;
@@ -15,35 +17,31 @@ interface SnapshotMetadata {
   size: number;
 }
 
-const SNAPSHOT_STORAGE_KEY = 'dashboard_snapshots';
-const SNAPSHOT_METADATA_KEY = 'snapshot_metadata';
+export interface ComparisonResult {
+  activeUsers: {
+    increased: Array<ActiveDealerData & { difference: number; previousCount: number }>;
+    decreased: Array<ActiveDealerData & { difference: number; previousCount: number }>;
+    new: ActiveDealerData[];
+    removed: ActiveDealerData[];
+  };
+  expiredUsers: {
+    increased: Array<ExpiredDealerData & { difference: number; previousCount: number }>;
+    decreased: Array<ExpiredDealerData & { difference: number; previousCount: number }>;
+    new: ExpiredDealerData[];
+    removed: ExpiredDealerData[];
+  };
+}
 
-// Get current date in YYYY-MM-DD format
-export const getCurrentDate = (): string => {
-  return new Date().toISOString().split('T')[0];
-};
+const SNAPSHOT_KEY_PREFIX = 'snapshot_';
+const METADATA_KEY = 'snapshot_metadata';
 
-// Get current month-year in YYYY-MM format
-export const getCurrentMonthYear = (): string => {
-  return new Date().toISOString().slice(0, 7);
-};
-
-// Generate snapshot filename
-export const generateSnapshotFilename = (): string => {
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const time = now.toTimeString().slice(0, 8).replace(/:/g, '-');
-  return `${date}_${time}.json`;
-};
-
-// Save snapshot data
-export const saveSnapshot = async (activeData: any[], expiredData: any[]): Promise<string> => {
+export const saveSnapshot = async (activeData: ActiveDealerData[], expiredData: ExpiredDealerData[]): Promise<string> => {
   const timestamp = new Date().toISOString();
-  const date = getCurrentDate();
-  const monthYear = getCurrentMonthYear();
-  const filename = generateSnapshotFilename();
+  const date = timestamp.split('T')[0];
+  const monthYear = date.slice(0, 7);
+  const filename = `${date}_${timestamp.split('T')[1].slice(0, 5).replace(':', '-')}.json`;
 
-  const snapshotData: SnapshotData = {
+  const snapshot: SnapshotData = {
     activeUsers: activeData,
     expiredUsers: expiredData,
     timestamp,
@@ -51,231 +49,148 @@ export const saveSnapshot = async (activeData: any[], expiredData: any[]): Promi
     monthYear
   };
 
-  // Get existing snapshots
-  const existingSnapshots = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '{}');
-  const existingMetadata = JSON.parse(localStorage.getItem(SNAPSHOT_METADATA_KEY) || '[]');
-
-  // Save snapshot
-  existingSnapshots[filename] = snapshotData;
-  localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(existingSnapshots));
+  // Save snapshot data
+  const snapshotKey = `${SNAPSHOT_KEY_PREFIX}${filename}`;
+  localStorage.setItem(snapshotKey, JSON.stringify(snapshot));
 
   // Update metadata
-  const metadata: SnapshotMetadata = {
+  const metadata = getAllSnapshotMetadata();
+  const newMetadata: SnapshotMetadata = {
     filename,
     timestamp,
     date,
     monthYear,
-    size: JSON.stringify(snapshotData).length
+    size: JSON.stringify(snapshot).length
   };
-  existingMetadata.push(metadata);
-  localStorage.setItem(SNAPSHOT_METADATA_KEY, JSON.stringify(existingMetadata));
+
+  metadata.unshift(newMetadata);
+  localStorage.setItem(METADATA_KEY, JSON.stringify(metadata));
 
   console.log(`Snapshot saved: ${filename}`);
   return filename;
 };
 
-// Get all snapshot metadata
 export const getAllSnapshotMetadata = (): SnapshotMetadata[] => {
-  const metadata = JSON.parse(localStorage.getItem(SNAPSHOT_METADATA_KEY) || '[]');
-  return metadata.sort((a: SnapshotMetadata, b: SnapshotMetadata) => 
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  );
-};
-
-// Get snapshot by filename
-export const getSnapshotByFilename = (filename: string): SnapshotData | null => {
-  const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '{}');
-  return snapshots[filename] || null;
-};
-
-// Get snapshots by month-year
-export const getSnapshotsByMonth = (monthYear: string): SnapshotData[] => {
-  const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '{}');
-  return Object.values(snapshots).filter((snapshot: any) => 
-    snapshot.monthYear === monthYear
-  );
-};
-
-// Get latest snapshot for a specific month
-export const getLatestSnapshotForMonth = (monthYear: string): SnapshotData | null => {
-  const monthSnapshots = getSnapshotsByMonth(monthYear);
-  if (monthSnapshots.length === 0) return null;
-  
-  return monthSnapshots.sort((a, b) => 
-    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  )[0];
-};
-
-// Get snapshot for first day of current month
-export const getFirstDaySnapshot = (): SnapshotData | null => {
-  const currentMonthYear = getCurrentMonthYear();
-  const firstDay = `${currentMonthYear}-01`;
-  
-  const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '{}');
-  const firstDaySnapshots = Object.values(snapshots).filter((snapshot: any) => 
-    snapshot.date === firstDay
-  );
-  
-  if (firstDaySnapshots.length === 0) return null;
-  return firstDaySnapshots[0] as SnapshotData;
-};
-
-// Compare two snapshots
-export const compareSnapshots = (current: SnapshotData, previous: SnapshotData) => {
-  const comparison = {
-    activeUsers: {
-      increased: [] as any[],
-      decreased: [] as any[],
-      unchanged: [] as any[],
-      new: [] as any[],
-      removed: [] as any[]
-    },
-    expiredUsers: {
-      increased: [] as any[],
-      decreased: [] as any[],
-      unchanged: [] as any[],
-      new: [] as any[],
-      removed: [] as any[]
-    }
-  };
-
-  // Compare active users
-  const currentActiveMap = new Map();
-  current.activeUsers.forEach(dealer => {
-    const key = `${dealer.dealer}-${dealer.service}`;
-    currentActiveMap.set(key, dealer);
-  });
-
-  const previousActiveMap = new Map();
-  previous.activeUsers.forEach(dealer => {
-    const key = `${dealer.dealer}-${dealer.service}`;
-    previousActiveMap.set(key, dealer);
-  });
-
-  // Analyze active users changes
-  currentActiveMap.forEach((currentDealer, key) => {
-    if (previousActiveMap.has(key)) {
-      const previousDealer = previousActiveMap.get(key);
-      const difference = currentDealer.activeUsers - previousDealer.activeUsers;
-      
-      if (difference > 0) {
-        comparison.activeUsers.increased.push({
-          ...currentDealer,
-          previousCount: previousDealer.activeUsers,
-          difference
-        });
-      } else if (difference < 0) {
-        comparison.activeUsers.decreased.push({
-          ...currentDealer,
-          previousCount: previousDealer.activeUsers,
-          difference
-        });
-      } else {
-        comparison.activeUsers.unchanged.push(currentDealer);
-      }
-    } else {
-      comparison.activeUsers.new.push(currentDealer);
-    }
-  });
-
-  previousActiveMap.forEach((previousDealer, key) => {
-    if (!currentActiveMap.has(key)) {
-      comparison.activeUsers.removed.push(previousDealer);
-    }
-  });
-
-  // Compare expired users (similar logic)
-  const currentExpiredMap = new Map();
-  current.expiredUsers.forEach(dealer => {
-    const key = `${dealer.dealer}-${dealer.service}`;
-    currentExpiredMap.set(key, dealer);
-  });
-
-  const previousExpiredMap = new Map();
-  previous.expiredUsers.forEach(dealer => {
-    const key = `${dealer.dealer}-${dealer.service}`;
-    previousExpiredMap.set(key, dealer);
-  });
-
-  currentExpiredMap.forEach((currentDealer, key) => {
-    if (previousExpiredMap.has(key)) {
-      const previousDealer = previousExpiredMap.get(key);
-      const difference = currentDealer.expiredUsers - previousDealer.expiredUsers;
-      
-      if (difference > 0) {
-        comparison.expiredUsers.increased.push({
-          ...currentDealer,
-          previousCount: previousDealer.expiredUsers,
-          difference
-        });
-      } else if (difference < 0) {
-        comparison.expiredUsers.decreased.push({
-          ...currentDealer,
-          previousCount: previousDealer.expiredUsers,
-          difference
-        });
-      } else {
-        comparison.expiredUsers.unchanged.push(currentDealer);
-      }
-    } else {
-      comparison.expiredUsers.new.push(currentDealer);
-    }
-  });
-
-  previousExpiredMap.forEach((previousDealer, key) => {
-    if (!currentExpiredMap.has(key)) {
-      comparison.expiredUsers.removed.push(previousDealer);
-    }
-  });
-
-  return comparison;
-};
-
-// Auto-save snapshot (should be called daily)
-export const autoSaveSnapshot = async () => {
   try {
-    // This would normally fetch from your Google Sheets service
-    // For now, we'll use a placeholder
-    const activeData = []; // Replace with actual data fetch
-    const expiredData = []; // Replace with actual data fetch
-    
-    const filename = await saveSnapshot(activeData, expiredData);
-    console.log(`Auto-snapshot saved: ${filename}`);
-    return filename;
+    const metadata = localStorage.getItem(METADATA_KEY);
+    return metadata ? JSON.parse(metadata) : [];
   } catch (error) {
-    console.error('Failed to auto-save snapshot:', error);
-    throw error;
+    console.error('Error loading snapshot metadata:', error);
+    return [];
   }
 };
 
-// Get available months from snapshots
-export const getAvailableMonths = (): string[] => {
-  const metadata = getAllSnapshotMetadata();
-  const months = [...new Set(metadata.map(m => m.monthYear))];
-  return months.sort((a, b) => b.localeCompare(a));
+export const getSnapshotByFilename = (filename: string): SnapshotData | null => {
+  try {
+    const snapshotKey = `${SNAPSHOT_KEY_PREFIX}${filename}`;
+    const snapshot = localStorage.getItem(snapshotKey);
+    return snapshot ? JSON.parse(snapshot) : null;
+  } catch (error) {
+    console.error('Error loading snapshot:', error);
+    return null;
+  }
 };
 
-// Delete old snapshots (cleanup)
-export const cleanupOldSnapshots = (daysToKeep: number = 90) => {
+export const getSnapshotsByMonth = (monthYear: string): SnapshotData[] => {
+  const metadata = getAllSnapshotMetadata();
+  const monthSnapshots = metadata
+    .filter(meta => meta.monthYear === monthYear)
+    .map(meta => getSnapshotByFilename(meta.filename))
+    .filter((snapshot): snapshot is SnapshotData => snapshot !== null);
+
+  return monthSnapshots;
+};
+
+export const getFirstDaySnapshot = (): SnapshotData | null => {
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const firstDayDate = `${currentMonth}-01`;
+  
+  const metadata = getAllSnapshotMetadata();
+  const firstDaySnapshot = metadata.find(meta => meta.date === firstDayDate);
+  
+  if (firstDaySnapshot) {
+    return getSnapshotByFilename(firstDaySnapshot.filename);
+  }
+  
+  return null;
+};
+
+export const compareSnapshots = (current: SnapshotData, previous: SnapshotData): ComparisonResult => {
+  const compareArrays = <T extends { dealer: string; service: string; zone: string }>(
+    currentArray: T[],
+    previousArray: T[],
+    countKey: keyof T
+  ) => {
+    const increased: Array<T & { difference: number; previousCount: number }> = [];
+    const decreased: Array<T & { difference: number; previousCount: number }> = [];
+    const newItems: T[] = [];
+    const removed: T[] = [];
+
+    currentArray.forEach(currentItem => {
+      const previousItem = previousArray.find(
+        p => p.dealer === currentItem.dealer && 
+            p.service === currentItem.service && 
+            p.zone === currentItem.zone
+      );
+
+      if (previousItem) {
+        const currentCount = Number(currentItem[countKey]);
+        const previousCount = Number(previousItem[countKey]);
+        const difference = currentCount - previousCount;
+
+        if (difference > 0) {
+          increased.push({ ...currentItem, difference, previousCount });
+        } else if (difference < 0) {
+          decreased.push({ ...currentItem, difference, previousCount });
+        }
+      } else {
+        newItems.push(currentItem);
+      }
+    });
+
+    previousArray.forEach(previousItem => {
+      const exists = currentArray.find(
+        c => c.dealer === previousItem.dealer && 
+            c.service === previousItem.service && 
+            c.zone === previousItem.zone
+      );
+      if (!exists) {
+        removed.push(previousItem);
+      }
+    });
+
+    return { increased, decreased, new: newItems, removed };
+  };
+
+  return {
+    activeUsers: compareArrays(current.activeUsers, previous.activeUsers, 'activeUsers'),
+    expiredUsers: compareArrays(current.expiredUsers, previous.expiredUsers, 'expiredUsers')
+  };
+};
+
+export const cleanupOldSnapshots = (daysToKeep: number = 90): void => {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - daysToKeep);
-  
-  const snapshots = JSON.parse(localStorage.getItem(SNAPSHOT_STORAGE_KEY) || '{}');
-  const metadata = JSON.parse(localStorage.getItem(SNAPSHOT_METADATA_KEY) || '[]');
-  
-  const filesToKeep = metadata.filter((m: SnapshotMetadata) => 
-    new Date(m.timestamp) > cutoffDate
-  );
-  
-  const newSnapshots: any = {};
-  filesToKeep.forEach((m: SnapshotMetadata) => {
-    if (snapshots[m.filename]) {
-      newSnapshots[m.filename] = snapshots[m.filename];
-    }
+  const cutoffDateStr = cutoffDate.toISOString().split('T')[0];
+
+  const metadata = getAllSnapshotMetadata();
+  const toKeep = metadata.filter(meta => meta.date >= cutoffDateStr);
+  const toDelete = metadata.filter(meta => meta.date < cutoffDateStr);
+
+  // Delete old snapshots
+  toDelete.forEach(meta => {
+    const snapshotKey = `${SNAPSHOT_KEY_PREFIX}${meta.filename}`;
+    localStorage.removeItem(snapshotKey);
   });
-  
-  localStorage.setItem(SNAPSHOT_STORAGE_KEY, JSON.stringify(newSnapshots));
-  localStorage.setItem(SNAPSHOT_METADATA_KEY, JSON.stringify(filesToKeep));
-  
-  console.log(`Cleaned up snapshots, kept ${filesToKeep.length} files`);
+
+  // Update metadata
+  localStorage.setItem(METADATA_KEY, JSON.stringify(toKeep));
+
+  console.log(`Cleanup complete: Removed ${toDelete.length} old snapshots`);
+};
+
+export const getAvailableMonths = (): string[] => {
+  const metadata = getAllSnapshotMetadata();
+  const months = Array.from(new Set(metadata.map(meta => meta.monthYear)));
+  return months.sort().reverse();
 };
